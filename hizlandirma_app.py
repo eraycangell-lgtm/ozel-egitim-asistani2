@@ -38,7 +38,7 @@ if 'analiz' not in st.session_state: st.session_state.analiz = ""
 if 'konu' not in st.session_state: st.session_state.konu = ""
 
 # --------------------------------------------------------------------------
-# 4. FONKSİYONLAR (MEB DİLİ + SESLENDİRME 🎙️)
+# 4. FONKSİYONLAR (MEB DİLİ + SESLENDİRME + GÜVENLİ PDF 🛠️)
 # --------------------------------------------------------------------------
 
 def metni_seslendir(text):
@@ -108,7 +108,9 @@ def cevap_analiz_et(sorular, cevaplar, model_tipi):
         return "Rapor oluşturulamadı."
 
 def create_pdf(text, ogrenci_adi, konu):
-    """MEB Logolu PDF Çıktısı"""
+    """MEB Logolu PDF Çıktısı - Dosya Tabanlı Güvenli Yöntem"""
+    
+    # Emojileri temizle (PDF'te bozuk çıkmasın)
     replacements = {
         "**": "", "__": "", "### ": "", "## ": "",
         "📊": "", "✅": "", "🚀": "", "🎯": "", 
@@ -137,8 +139,11 @@ def create_pdf(text, ogrenci_adi, konu):
             self.set_font('Arial', 'I', 8)
             self.cell(0, 10, f'Sayfa {self.page_no()} | Resmi Hizmete Ozeldir', 0, 0, 'C')
 
+    # PDF Nesnesi Oluştur
     pdf = PDF()
     pdf.add_page()
+    
+    # Font Yükleme (Arial)
     font_path = 'arial.ttf'
     if os.path.exists(font_path):
         pdf.add_font('Arial', '', font_path, uni=True)
@@ -146,13 +151,29 @@ def create_pdf(text, ogrenci_adi, konu):
     else:
         pdf.set_font("Helvetica", size=11)
 
+    # Başlıklar
     pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 10, f"Ogrenci: {ogrenci_adi} | Konu: {konu}", 0, 1)
     pdf.line(10, 35, 200, 35)
     pdf.ln(5)
+    
+    # İçerik
     pdf.set_font('Arial', '', 11)
     pdf.multi_cell(0, 7, text)
-    return pdf.output(dest='S').encode('latin-1', 'replace')
+    
+    # --- KRİTİK DÜZELTME: Dosyaya yazıp okuma yöntemi ---
+    # Bu yöntem 'latin-1' hatasını kesin olarak çözer.
+    temp_filename = "gecici_rapor.pdf"
+    pdf.output(temp_filename)
+    
+    with open(temp_filename, "rb") as f:
+        pdf_bytes = f.read()
+        
+    # Geçici dosyayı sil (temizlik)
+    if os.path.exists(temp_filename):
+        os.remove(temp_filename)
+        
+    return pdf_bytes
 
 def sifirla():
     st.session_state.asama = 0
