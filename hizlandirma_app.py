@@ -9,7 +9,7 @@ import time
 import re
 
 # --------------------------------------------------------------------------
-# 1. AYARLAR VE API
+# 1. AYARLAR VE API BAĞLANTISI
 # --------------------------------------------------------------------------
 st.set_page_config(
     page_title="ADÜ - Özel Eğitim Asistanı", 
@@ -17,7 +17,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# API Anahtarı Kontrolü
 if "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
@@ -29,15 +28,22 @@ else:
     st.stop()
 
 # --------------------------------------------------------------------------
-# 2. AKILLI MODEL DEDEKTİFİ 🕵️‍♂️
+# 2. AKILLI MODEL DEDEKTİFİ 🕵️‍♂️ (Otomatik En İyi Modeli Bulur)
 # --------------------------------------------------------------------------
 def en_iyi_modeli_bul():
     """
-    Hesabındaki modelleri tarar. 'Flash' ve '3.0' geçen en yeni modeli bulur.
+    Hesabındaki modelleri tarar. 
+    Önce '3.0' serisine, yoksa '2.0' serisine bakar. En güncel 'Flash' modelini seçer.
     """
     try:
         mevcut_modeller = [m.name for m in genai.list_models()]
-        arananlar = ["gemini-3.0-flash", "gemini-3-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        # Öncelik sırası: En yeni -> En eski
+        arananlar = [
+            "gemini-3.0-flash", 
+            "gemini-3-flash", 
+            "gemini-2.0-flash", 
+            "gemini-1.5-flash"
+        ]
         secilen = None
         for hedef in arananlar:
             for gercek_isim in mevcut_modeller:
@@ -45,7 +51,8 @@ def en_iyi_modeli_bul():
                     secilen = gercek_isim
                     break
             if secilen: break
-        if not secilen: secilen = 'gemini-1.5-flash'
+            
+        if not secilen: secilen = 'gemini-1.5-flash' # Güvenli Liman
         return secilen
     except:
         return 'gemini-1.5-flash'
@@ -54,7 +61,7 @@ aktif_model_ismi = en_iyi_modeli_bul()
 model_ai = genai.GenerativeModel(aktif_model_ismi)
 
 # --------------------------------------------------------------------------
-# 3. FONKSİYONLAR (RESMİYET GÜNCELLEMESİ YAPILDI 🏛️)
+# 3. PROFESYONEL FONKSİYONLAR (USTA ÖĞRETMEN MODU 🎓)
 # --------------------------------------------------------------------------
 
 if 'asama' not in st.session_state: st.session_state.asama = 0
@@ -63,7 +70,7 @@ if 'analiz' not in st.session_state: st.session_state.analiz = ""
 if 'konu' not in st.session_state: st.session_state.konu = ""
 
 def super_temizlik(metin):
-    """PDF temizliği."""
+    """PDF için karakter temizliği."""
     if not metin: return ""
     degisimler = {
         "ğ": "g", "Ğ": "G", "ş": "s", "Ş": "S", "ı": "i", "İ": "I",
@@ -72,6 +79,7 @@ def super_temizlik(metin):
     }
     for eski, yeni in degisimler.items():
         metin = metin.replace(eski, yeni)
+    # Sadece ASCII karakterler kalsın (Emoji temizliği)
     metin = re.sub(r'[^\x00-\x7F]+', '', metin)
     return metin
 
@@ -92,56 +100,59 @@ def yapay_zeka_istegi(prompt, resim=None):
                 time.sleep(bekleme)
                 continue
             else:
-                return f"Hata: {str(e)}"
-    return "Sistem yanıt veremedi."
+                return f"Sistem Hatası: {str(e)}"
+    return "Sistem şu an yanıt veremiyor."
 
 def soru_uret(konu, sinif, model_tipi, resim=None):
     """
-    TAM RESMİ FORMAT: Emojiler yasaklandı, akademik dil zorunlu kılındı.
+    PROMPT GÜNCELLEMESİ: 20 Yıllık Usta Öğretmen + MEB Ciddiyeti
     """
     prompt = f"""
-    ROL: Sen T.C. Milli Eğitim Bakanlığı mevzuatına hakim, kıdemli bir 'Özel Eğitim Uzmanısın'.
-    GÖREV: {sinif}. sınıf düzeyindeki özel yetenekli öğrenci için, '{konu}' kazanımına yönelik, 
-    '{model_tipi}' modeline uygun 3 adet değerlendirme sorusu hazırla.
+    ROL: Sen MEB bünyesinde 20 yıl görev yapmış, mevzuatın kitabını yazmış, öğrenci psikolojisini ve gelişimsel süreçleri avucunun içi gibi bilen kıdemli bir 'Başöğretmensin'.
     
-    KURALLAR:
-    1. Üslup tamamen resmi, akademik ve didaktik olmalıdır.
-    2. Asla samimi ifadeler, emojiler veya ünlem işaretleri kullanma.
-    3. Sorular Bloom taksonomisinin üst basamaklarına (Analiz, Sentez) hitap etmelidir.
+    GÖREV: {sinif}. sınıf düzeyindeki özel yetenekli bir öğrenci için, '{konu}' kazanımına yönelik, '{model_tipi}' farklılaştırma modeline uygun 3 adet 'Üst Düzey Düşünme Becerisi' (Analiz, Sentez, Değerlendirme) sorusu hazırla.
+    
+    ÜSLUP VE KURALLAR:
+    1. TAM CİDDİYET: Asla emoji, ünlem (!) veya "Harika!", "Süper!" gibi laubali ifadeler kullanma.
+    2. UZMANLIK: Sorular basit bilgi düzeyinde değil, öğrencinin potansiyelini zorlayacak derinlikte olmalıdır.
+    3. RESMİYET: Soruları bir sınav kağıdı veya resmi bir değerlendirme formu ciddiyetiyle sun.
     """
     return yapay_zeka_istegi(prompt, resim)
 
 def cevap_analiz_et(sorular, cevaplar, model_tipi):
     """
-    TAM RESMİ FORMAT: Başlıklar standartlaştırıldı, dil edilgen yapıldı.
+    PROMPT GÜNCELLEMESİ: Kurul Başkanı Uzmanlığı + Resmi Rapor Dili
     """
     prompt = f"""
-    GÖREV: Aşağıdaki öğrenci cevaplarını, resmi bir 'Bireyselleştirilmiş Eğitim Planı (BEP) Geliştirme Birimi Raporu' formatında analiz et.
+    ROL: Sen Özel Eğitim Değerlendirme Kurulunda yıllarca başkanlık yapmış, bir öğrencinin cevabından onun tüm bilişsel haritasını çıkarabilen bir uzmansın.
+    
+    GÖREV: Aşağıdaki öğrenci cevaplarını, İlçe Milli Eğitim Müdürlüğüne sunulacak resmi bir 'Eğitsel Değerlendirme Raporu' titizliğinde analiz et.
     
     VERİLER:
     - Sorular: {sorular}
     - Cevaplar: {cevaplar}
     - Model: {model_tipi}
     
-    ÇIKTI FORMATI (Aynen bu başlıkları kullan, emoji kullanma):
+    RAPOR FORMATI (Aynen bu başlıkları kullan, emoji YASAK):
     
     1. PERFORMANS DUZEYI
-    (Öğrencinin durumu, 'gözlemlenmiştir', 'tespit edilmiştir' gibi edilgen ve nesnel ifadelerle yazılacaktır.)
+    (Öğrencinin mevcut durumu hakkında; 'gözlemlenmiştir', 'tespit edilmiştir' gibi nesnel ve edilgen yargılar kullan.)
     
     2. KAZANIM DEGERLENDIRMESI
-    (MEB müfredat terminolojisine uygun teknik analiz.)
+    (Cevapların MEB müfredatındaki karşılığını teknik terimlerle açıkla.)
     
     3. GELISIM ALANLARI
-    (Desteklenmesi gereken noktalar akademik dille ifade edilecektir.)
+    (Eksik veya desteklenmesi gereken noktaları profesyonel bir dille belirt.)
     
     4. ZENGINLESTIRME EYLEM PLANI
-    (Somut, uygulanabilir ve ölçülebilir bir proje önerisi.)
+    (Bu öğrenci için uygulanabilir, somut ve akademik bir proje/performans görevi öner.)
     
-    ÖNEMLİ UYARI: Çıktıda kesinlikle emoji, sohbet dili veya kişisel yorum bulunmayacaktır. Tamamen bürokratik bir dil kullan.
+    ÖNEMLİ: Çıktı tamamen bürokratik ve akademik bir dille yazılmalıdır. Sohbet dili kesinlikle kullanılmayacaktır.
     """
     return yapay_zeka_istegi(prompt)
 
 def create_pdf(text, ogrenci_adi, konu):
+    # PDF oluştururken temizlik yap
     text = super_temizlik(text)
     ogrenci_adi = super_temizlik(ogrenci_adi)
     konu = super_temizlik(konu)
@@ -153,12 +164,12 @@ def create_pdf(text, ogrenci_adi, konu):
                     self.image('logo.png', 10, 8, 20)
                 except: pass
             self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, 'TC. ADU OZEL EGITIM PLANLAMA RAPORU', 0, 1, 'C')
+            self.cell(0, 10, 'TC. ADU OZEL EGITIM HIZMETLERI RAPORU', 0, 1, 'C')
             self.ln(10)
         def footer(self):
             self.set_y(-15)
             self.set_font('Arial', 'I', 8)
-            self.cell(0, 10, f'Sayfa {self.page_no()} | Resmi Evrak', 0, 0, 'C')
+            self.cell(0, 10, f'Sayfa {self.page_no()} | Resmi Evrak - Gizlidir', 0, 0, 'C')
 
     try:
         pdf = PDF()
@@ -181,7 +192,7 @@ def create_pdf(text, ogrenci_adi, konu):
 
 def metni_seslendir(text):
     try:
-        # Seslendirmede başlık numaralarını temizle ki robot gibi "Bir nokta" demesin
+        # Seslendirme için başlık işaretlerini temizle
         temiz = text.replace("*", "").replace("#", "")
         tts = gTTS(text=temiz, lang='tr')
         fp = BytesIO()
@@ -196,7 +207,7 @@ def sifirla():
     st.rerun()
 
 # --------------------------------------------------------------------------
-# 4. ARAYÜZ
+# 4. ARAYÜZ TASARIMI
 # --------------------------------------------------------------------------
 with st.sidebar:
     if os.path.exists("logo.png"): st.image("logo.png", width=120)
@@ -205,12 +216,12 @@ with st.sidebar:
     st.markdown("---")
     st.info("**Eray Cangel**\n\nÖzel Eğitim Uzmanı\nNo: 242018077")
     
-    # Model ismi gösterimi
+    # Model Bilgisi
     temiz_isim = aktif_model_ismi.split('/')[-1]
-    st.success(f"⚡ **Sistem:** {temiz_isim}")
+    st.success(f"⚡ **Motor:** {temiz_isim}")
     
     st.markdown("---")
-    st.header("📋 Öğrenci Bilgileri")
+    st.header("📋 Öğrenci")
     ad = st.text_input("Adı Soyadı", "Zekeriya Ayral")
     sinif = st.selectbox("Sınıf", [1, 2, 3, 4, 5, 6, 7, 8])
     egitim_modeli = st.selectbox("Model", ["Renzulli", "SCAMPER", "Purdue"])
@@ -243,7 +254,7 @@ if st.session_state.asama == 0:
         st.write("")
         if st.button("Analizi Başlat", type="primary"):
             if konu:
-                with st.spinner("Sistem analiz yapıyor..."):
+                with st.spinner("Başöğretmen analizi yapıyor..."):
                     st.session_state.konu = konu
                     st.session_state.sorular = soru_uret(konu, sinif, egitim_modeli, resim)
                     st.session_state.asama = 1
