@@ -2,6 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 from fpdf import FPDF
 from PIL import Image
+from gtts import gTTS
+from io import BytesIO
 import os
 
 # --------------------------------------------------------------------------
@@ -36,13 +38,24 @@ if 'analiz' not in st.session_state: st.session_state.analiz = ""
 if 'konu' not in st.session_state: st.session_state.konu = ""
 
 # --------------------------------------------------------------------------
-# 4. FONKSİYONLAR (STANDART MEB DİLİ 🇹🇷)
+# 4. FONKSİYONLAR (MEB DİLİ + SESLENDİRME 🎙️)
 # --------------------------------------------------------------------------
+
+def metni_seslendir(text):
+    """Metni sese çevirir ve oynatılabilir veri döndürür."""
+    try:
+        # Metindeki emojileri ve garip işaretleri temizle ki okurken takılmasın
+        temiz_metin = text.replace("*", "").replace("#", "").replace("📊", "").replace("✅", "")
+        
+        tts = gTTS(text=temiz_metin, lang='tr', slow=False)
+        ses_dosyasi = BytesIO()
+        tts.write_to_fp(ses_dosyasi)
+        return ses_dosyasi
+    except:
+        return None
 
 def soru_uret(konu, sinif, model_tipi, resim=None):
     """MEB Kazanım odaklı sorular üretir."""
-    
-    # STANDARTLAŞTIRILMIŞ DEVLET DİLİ PROMPTU
     prompt_text = f"""
     ROL: Sen T.C. Milli Eğitim Bakanlığı (MEB) mevzuatına, Özel Eğitim Hizmetleri Yönetmeliğine ve BİLSEM yönergelerine hakim, kıdemli bir özel eğitim uzmanısın.
     
@@ -59,7 +72,6 @@ def soru_uret(konu, sinif, model_tipi, resim=None):
     2. Sorular Bloom Taksonomisinin analiz, sentez ve değerlendirme basamaklarında olsun.
     3. Eğer görsel veri verildiyse, sorulardan en az biri görseli yorumlamaya dayalı olsun.
     """
-    
     try:
         if resim:
             response = model_ai.generate_content([prompt_text, resim])
@@ -71,7 +83,6 @@ def soru_uret(konu, sinif, model_tipi, resim=None):
 
 def cevap_analiz_et(sorular, cevaplar, model_tipi):
     """Cevapları BEP ve RAM standartlarına göre raporlar."""
-    
     prompt = f"""
     GÖREV: Aşağıdaki öğrenci cevaplarını bir 'Bireyselleştirilmiş Eğitim Programı (BEP) Geliştirme Birimi' üyesi ciddiyetiyle analiz et.
     
@@ -98,10 +109,9 @@ def cevap_analiz_et(sorular, cevaplar, model_tipi):
 
 def create_pdf(text, ogrenci_adi, konu):
     """MEB Logolu PDF Çıktısı"""
-    
     replacements = {
         "**": "", "__": "", "### ": "", "## ": "",
-        "📊": "", "✅": "", "🚀": "", "🎯": "", # Emojileri temizle
+        "📊": "", "✅": "", "🚀": "", "🎯": "", 
         "≈": " yaklasik ", "≠": " esit degil ", "≤": " kucuk esit ", "≥": " buyuk esit ",
         "×": "x", "÷": "/", "−": "-", "–": "-", "—": "-"
     }
@@ -129,7 +139,6 @@ def create_pdf(text, ogrenci_adi, konu):
 
     pdf = PDF()
     pdf.add_page()
-
     font_path = 'arial.ttf'
     if os.path.exists(font_path):
         pdf.add_font('Arial', '', font_path, uni=True)
@@ -141,10 +150,8 @@ def create_pdf(text, ogrenci_adi, konu):
     pdf.cell(0, 10, f"Ogrenci: {ogrenci_adi} | Konu: {konu}", 0, 1)
     pdf.line(10, 35, 200, 35)
     pdf.ln(5)
-    
     pdf.set_font('Arial', '', 11)
     pdf.multi_cell(0, 7, text)
-    
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def sifirla():
@@ -154,28 +161,20 @@ def sifirla():
     st.rerun()
 
 # --------------------------------------------------------------------------
-# 5. ARAYÜZ (MEB TASARIMI)
+# 5. ARAYÜZ
 # --------------------------------------------------------------------------
 with st.sidebar:
     if os.path.exists("logo.png"):
         st.image("logo.png", width=120)
     else:
         st.write("🇹🇷 MEB/ADÜ")
-    
     st.markdown("---")
     st.info("**Eray Cangel**\n\nÖzel Eğitim Uzmanı\nNo: 242018077")
-    
     st.markdown("---")
     st.header("📋 Öğrenci Bilgileri")
     ad = st.text_input("Adı Soyadı", "Zekeriya Ayral")
     sinif = st.selectbox("Sınıf Seviyesi", [1, 2, 3, 4, 5, 6, 7, 8])
-    
-    # DÜZELTİLDİ: MEB BİLSEM seçeneği kalktı, sadece modeller kaldı.
-    egitim_modeli = st.selectbox("Farklılaştırma Modeli", 
-                                 ["Renzulli (Üçlü Halka)", 
-                                  "SCAMPER (Yaratıcılık)", 
-                                  "Purdue Modeli"])
-    
+    egitim_modeli = st.selectbox("Farklılaştırma Modeli", ["Renzulli (Üçlü Halka)", "SCAMPER (Yaratıcılık)", "Purdue Modeli"])
     st.markdown("---")
     if st.button("🔄 Yeni Analiz", type="primary"):
         sifirla()
@@ -196,7 +195,6 @@ if st.session_state.asama == 0:
     Bu sistem, **Özel Eğitim Hizmetleri Yönetmeliği** kapsamında, özel yetenekli öğrencilerin 
     hazırbulunuşluk düzeyini belirlemek ve **BEP** uyumlu zenginleştirme yapmak için tasarlanmıştır.
     """)
-    
     uploaded_file = st.file_uploader("Varsa materyal/çalışma görseli yükleyiniz:", type=["jpg", "jpeg", "png"])
     resim_goster = None
     if uploaded_file is not None:
@@ -221,15 +219,12 @@ if st.session_state.asama == 0:
 
 elif st.session_state.asama == 1:
     st.success(f"✅ **{st.session_state.konu}** konusu için tespit soruları oluşturuldu.")
-    
     with st.container(border=True):
         st.markdown("### 📝 Performans Belirleme Soruları")
         st.markdown(st.session_state.sorular)
-    
     st.write("### ✍️ Öğrenci Dönütleri")
     with st.form("cevap_formu"):
         cevaplar = st.text_area("Öğrenci cevaplarını giriniz:", height=200)
-        
         submitted = st.form_submit_button("BEP Raporunu Oluştur 🎯", type="primary")
         if submitted:
             if len(cevaplar) < 5:
@@ -248,6 +243,7 @@ elif st.session_state.asama == 2:
     
     col_res_1, col_res_2 = st.columns(2)
     with col_res_1:
+        # PDF BUTONU
         try:
             pdf_data = create_pdf(st.session_state.analiz, ad, st.session_state.konu)
             st.download_button(
@@ -261,8 +257,18 @@ elif st.session_state.asama == 2:
             st.error(f"PDF Hatası: {e}")
             
     with col_res_2:
-        if st.button("Yeni Öğrenci / Konu"):
-            sifirla()
+        # SESLİ OKUMA BUTONU
+        if st.button("🔊 Raporu Sesli Dinle"):
+            with st.spinner("Ses dosyası hazırlanıyor..."):
+                ses = metni_seslendir(st.session_state.analiz)
+                if ses:
+                    st.audio(ses, format='audio/mp3')
+                else:
+                    st.error("Ses oluşturulamadı.")
+    
+    st.markdown("---")
+    if st.button("Yeni Öğrenci / Konu"):
+        sifirla()
 
 st.markdown("---")
 st.markdown("<div style='text-align: center; color: grey; font-size: 0.8em;'>T.C. Milli Eğitim Bakanlığı Standartlarına Uygun | 2026</div>", unsafe_allow_html=True)
