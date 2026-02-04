@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 from fpdf import FPDF
+from PIL import Image
 import os
 
 # --------------------------------------------------------------------------
@@ -33,21 +34,30 @@ if 'asama' not in st.session_state: st.session_state.asama = 0
 if 'sorular' not in st.session_state: st.session_state.sorular = ""
 if 'analiz' not in st.session_state: st.session_state.analiz = ""
 if 'konu' not in st.session_state: st.session_state.konu = ""
+# Resim verisi session state'de tutulmaz (büyük veri), her seferinde yeniden yüklenir veya akışta kullanılır.
 
 # --------------------------------------------------------------------------
 # 4. FONKSİYONLAR (Yapay Zeka ve PDF)
 # --------------------------------------------------------------------------
 
-def soru_uret(konu, sinif, model_tipi):
-    """Öğrenci seviyesini ölçmek için sorular üretir."""
-    prompt = f"""
+def soru_uret(konu, sinif, model_tipi, resim=None):
+    """Öğrenci seviyesini ölçmek için sorular üretir. Resim varsa onu da dikkate alır."""
+    prompt_text = f"""
     Sen uzman bir özel eğitim öğretmenisin. 
     Öğrenci: {sinif}. sınıf, üstün yetenekli. Konu: '{konu}'. Yaklaşım: {model_tipi}.
     GÖREV: Bu öğrencinin konu hakkındaki derinliğini ölçmek için 3 adet yaratıcı, ezber bozan, üst düzey soru hazırla.
+    
+    Eğer bir resim verildiyse, soruları mutlaka o görseldeki içerikle ilişkilendirerek sor.
     Sorular düşündürücü olsun.
     """
+    
     try:
-        return model_ai.generate_content(prompt).text
+        if resim:
+            # Resim varsa listeye ekleyip gönderiyoruz
+            response = model_ai.generate_content([prompt_text, resim])
+        else:
+            response = model_ai.generate_content(prompt_text)
+        return response.text
     except:
         return "Yapay zeka şu an cevap veremiyor, lütfen tekrar dene."
 
@@ -180,6 +190,14 @@ if st.session_state.asama == 0:
     kişiye özel **zenginleştirilmiş rota** oluşturur.
     """)
     
+    # --- YENİ EKLENEN KISIM: RESİM YÜKLEME ---
+    uploaded_file = st.file_uploader("Varsa bir görsel yükleyin (Örn: Öğrenci resmi, çalışma kağıdı, RAM raporu)", type=["jpg", "jpeg", "png"])
+    resim_goster = None
+    if uploaded_file is not None:
+        resim_goster = Image.open(uploaded_file)
+        st.image(resim_goster, caption='Yüklenen Görsel', width=250)
+    # -----------------------------------------
+
     col_a, col_b = st.columns([3, 1])
     with col_a:
         konu_girisi = st.text_input("Hızlandırılacak Konu Başlığı:", placeholder="Örn: Yapay Zeka Etiği, Küresel Isınma, Uzay...")
@@ -192,7 +210,8 @@ if st.session_state.asama == 0:
             else:
                 with st.spinner("Yapay zeka pedagojik analiz yapıyor..."):
                     st.session_state.konu = konu_girisi
-                    st.session_state.sorular = soru_uret(konu_girisi, sinif, egitim_modeli)
+                    # Resmi de fonksiyona gönderiyoruz
+                    st.session_state.sorular = soru_uret(konu_girisi, sinif, egitim_modeli, resim_goster)
                     st.session_state.asama = 1
                     st.rerun()
 
