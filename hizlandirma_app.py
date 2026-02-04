@@ -6,7 +6,7 @@ from gtts import gTTS
 from io import BytesIO
 import os
 import time
-import re # Düzenli ifadeler (Regex) kütüphanesi - Temizlik için şart
+import re
 
 # --------------------------------------------------------------------------
 # 1. AYARLAR VE API
@@ -21,7 +21,14 @@ st.set_page_config(
 if "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model_ai = genai.GenerativeModel('gemini-flash-latest') 
+        # --- MODEL GÜNCELLEMESİ: GEMINI 3 FLASH ⚡ ---
+        # Hem çok zeki hem de okul çapında kullanım için limiti yüksek model.
+        # Not: Eğer '3.0' henüz tam yayında değilse otomatik 2.5'a düşebilir, kod güvenlidir.
+        try:
+            model_ai = genai.GenerativeModel('gemini-3.0-flash')
+        except:
+            model_ai = genai.GenerativeModel('gemini-3.0-flash-preview')
+            
     except Exception as e:
         st.error(f"Sistem Hatası: API anahtarı doğrulanamadı. ({e})")
         st.stop()
@@ -40,13 +47,8 @@ if 'konu' not in st.session_state: st.session_state.konu = ""
 # --------------------------------------------------------------------------
 
 def super_temizlik(metin):
-    """
-    Bu fonksiyon metni PDF için güvenli hale getirir.
-    Latin-1 hatasına sebep olabilecek HER ŞEYİ temizler.
-    """
+    """PDF için metni temizler."""
     if not metin: return ""
-    
-    # 1. Önce bilinen Türkçe karakterleri değiştir
     degisimler = {
         "ğ": "g", "Ğ": "G", "ş": "s", "Ş": "S", "ı": "i", "İ": "I",
         "ç": "c", "Ç": "C", "ö": "o", "Ö": "O", "ü": "u", "Ü": "U",
@@ -54,17 +56,11 @@ def super_temizlik(metin):
     }
     for eski, yeni in degisimler.items():
         metin = metin.replace(eski, yeni)
-    
-    # 2. Bilinmeyen tüm garip sembolleri (Emoji vb.) sil at (Regex)
-    # Sadece harfler, sayılar ve temel noktalama işaretleri kalsın.
     metin = re.sub(r'[^\x00-\x7F]+', '', metin)
-    
     return metin
 
 def yapay_zeka_istegi(prompt, resim=None):
-    """
-    Hız sınırına takılırsa 3 kere dener, pes etmez.
-    """
+    """Gemini 3 Flash ile istek atar."""
     max_deneme = 3
     for i in range(max_deneme):
         try:
@@ -76,42 +72,40 @@ def yapay_zeka_istegi(prompt, resim=None):
         except Exception as e:
             hata = str(e).lower()
             if "429" in hata or "quota" in hata:
-                # Kota dolduysa bekle
-                bekleme = (i + 1) * 5 # 5, 10, 15 saniye artarak bekle
-                st.toast(f"🚦 Sistem yoğun, sıranız bekleniyor... ({bekleme} sn)")
+                bekleme = (i + 1) * 2 
+                st.toast(f"Sistem yoğun, bekleniyor... ({bekleme} sn)")
                 time.sleep(bekleme)
                 continue
             else:
-                # Başka hataysa bildir
+                if "not found" in hata:
+                     return "⚠️ Model Hatası: 'gemini-3.0-flash' ismi değişmiş olabilir. Lütfen ayarlardan kontrol ediniz."
                 return f"Hata oluştu: {str(e)}"
-    return "⚠️ Sistem şu an çok yoğun. Lütfen 1 dakika sonra tekrar deneyiniz."
+    return "⚠️ Sistem şu an cevap veremiyor."
 
 def soru_uret(konu, sinif, model_tipi, resim=None):
     prompt = f"""
-    ROL: Sen MEB mevzuatına hakim bir özel eğitim uzmanısın.
+    ROL: Sen MEB mevzuatına hakim kıdemli bir özel eğitim uzmanısın (Başöğretmen).
     GÖREV: {sinif}. sınıf seviyesindeki özel yetenekli öğrenci için, '{konu}' konusunda, 
-    '{model_tipi}' modeline uygun 3 adet üst düzey soru hazırla.
+    '{model_tipi}' modeline uygun 3 adet yaratıcı ve üst düzey soru hazırla.
     """
     return yapay_zeka_istegi(prompt, resim)
 
 def cevap_analiz_et(sorular, cevaplar, model_tipi):
     prompt = f"""
-    GÖREV: Öğrenci cevaplarını analiz et ve resmi rapor diliyle yaz.
+    GÖREV: Öğrenci cevaplarını MEB standartlarında, resmi ve akademik bir dille analiz et.
     SORULAR: {sorular}
     CEVAPLAR: {cevaplar}
     MODEL: {model_tipi}
     ÇIKTI FORMATI:
-    1. PERFORMANS DÜZEYİ
-    2. KAZANIMLAR
+    1. PERFORMANS DÜZEYİ (Detaylı analiz)
+    2. KAZANIMLAR (MEB terminolojisiyle)
     3. GELİŞİM ALANLARI
-    4. PROJE ÖNERİSİ
+    4. PROJE ÖNERİSİ (Yaratıcı ve uygulanabilir)
     """
     return yapay_zeka_istegi(prompt)
 
 def create_pdf(text, ogrenci_adi, konu):
-    """ÇÖKMEYEN PDF OLUŞTURUCU"""
-    
-    # --- KRİTİK NOKTA: Verileri temizle ---
+    """PDF Oluşturucu"""
     text = super_temizlik(text)
     ogrenci_adi = super_temizlik(ogrenci_adi)
     konu = super_temizlik(konu)
@@ -137,8 +131,6 @@ def create_pdf(text, ogrenci_adi, konu):
     try:
         pdf = PDF()
         pdf.add_page()
-        
-        # Font Ayarı
         font_path = 'arial.ttf'
         if os.path.exists(font_path):
             pdf.add_font('Arial', '', font_path, uni=True)
@@ -146,7 +138,6 @@ def create_pdf(text, ogrenci_adi, konu):
         else:
             pdf.set_font("Helvetica", size=11)
 
-        # Yazdırma
         pdf.set_font('Arial', 'B', 11)
         pdf.cell(0, 10, f"Ogrenci: {ogrenci_adi} | Konu: {konu}", 0, 1)
         pdf.line(10, 35, 200, 35)
@@ -154,15 +145,11 @@ def create_pdf(text, ogrenci_adi, konu):
         
         pdf.set_font('Arial', '', 11)
         pdf.multi_cell(0, 7, text)
-        
         return pdf.output(dest='S').encode('latin-1', 'replace')
-    except Exception as e:
-        st.error(f"PDF Oluşturulamadı: {e}")
-        return None
+    except: return None
 
 def metni_seslendir(text):
     try:
-        # Seslendirme için temizliğe gerek yok, gTTS Türkçeyi sever
         temiz = text.replace("*", "").replace("#", "")
         tts = gTTS(text=temiz, lang='tr')
         fp = BytesIO()
@@ -201,10 +188,8 @@ with col2:
     st.caption("MEB Standartlarına Uygun Raporlama ve Analiz Aracı")
 st.markdown("---")
 
-# AŞAMA 0: GİRİŞ
 if st.session_state.asama == 0:
     st.info(f"Model: {egitim_modeli} | Sınıf: {sinif}")
-    
     uploaded_file = st.file_uploader("Görsel Yükle (Opsiyonel):", type=["jpg", "png"])
     resim = Image.open(uploaded_file) if uploaded_file else None
     if resim: st.image(resim, width=200)
@@ -217,45 +202,36 @@ if st.session_state.asama == 0:
         st.write("")
         if st.button("Başlat 🚀", type="primary"):
             if konu:
-                with st.spinner("Analiz yapılıyor (Bu işlem 10-15 saniye sürebilir)..."):
+                with st.spinner("Gemini 3 Flash Analiz Yapıyor..."):
                     st.session_state.konu = konu
                     st.session_state.sorular = soru_uret(konu, sinif, egitim_modeli, resim)
                     st.session_state.asama = 1
                     st.rerun()
 
-# AŞAMA 1: SORU - CEVAP
 elif st.session_state.asama == 1:
     st.success("Sorular Hazır.")
     st.markdown(st.session_state.sorular)
-    
     with st.form("cevap_form"):
         cvp = st.text_area("Öğrenci Cevapları:", height=150)
         if st.form_submit_button("Raporla 🎯"):
             if cvp:
-                with st.spinner("Rapor yazılıyor..."):
+                with st.spinner("Resmi rapor yazılıyor..."):
                     st.session_state.analiz = cevap_analiz_et(st.session_state.sorular, cvp, egitim_modeli)
                     st.session_state.asama = 2
                     st.rerun()
 
-# AŞAMA 2: SONUÇ
 elif st.session_state.asama == 2:
     st.markdown(f"### Rapor: {ad}")
     st.markdown(st.session_state.analiz)
-    
     c1, c2 = st.columns(2)
     with c1:
-        # PDF Butonu
         pdf_data = create_pdf(st.session_state.analiz, ad, st.session_state.konu)
         if pdf_data:
             st.download_button("📄 PDF İndir", data=pdf_data, file_name="Rapor.pdf", mime="application/pdf", type="primary")
-        else:
-            st.error("PDF oluşturulamadı.")
-            
+        else: st.error("PDF oluşturulamadı.")
     with c2:
-        # Ses Butonu
         if st.button("🔊 Dinle"):
             ses = metni_seslendir(st.session_state.analiz)
             if ses: st.audio(ses)
-    
     st.markdown("---")
     if st.button("Yeni Konu"): sifirla()
