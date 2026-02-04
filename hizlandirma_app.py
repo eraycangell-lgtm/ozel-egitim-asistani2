@@ -36,26 +36,28 @@ if 'analiz' not in st.session_state: st.session_state.analiz = ""
 if 'konu' not in st.session_state: st.session_state.konu = ""
 
 # --------------------------------------------------------------------------
-# 4. FONKSİYONLAR (MEB ENTEGRASYONLU 🇹🇷)
+# 4. FONKSİYONLAR (STANDART MEB DİLİ 🇹🇷)
 # --------------------------------------------------------------------------
 
 def soru_uret(konu, sinif, model_tipi, resim=None):
     """MEB Kazanım odaklı sorular üretir."""
     
-    # MEB PROMPT AYARI
+    # STANDARTLAŞTIRILMIŞ DEVLET DİLİ PROMPTU
     prompt_text = f"""
-    ROL: Sen T.C. Milli Eğitim Bakanlığı (MEB) müfredatına ve Özel Eğitim Hizmetleri Yönetmeliğine hakim, 20 yıllık uzman bir başöğretmensin.
+    ROL: Sen T.C. Milli Eğitim Bakanlığı (MEB) mevzuatına, Özel Eğitim Hizmetleri Yönetmeliğine ve BİLSEM yönergelerine hakim, kıdemli bir özel eğitim uzmanısın.
     
-    ÖĞRENCİ PROFİLİ: {sinif}. sınıf düzeyinde, 'Özel Yetenekli' tanısı almış (veya şüphesi olan) bir öğrenci.
-    KONU: '{konu}'
-    YÖNTEM: {model_tipi}
+    DURUM:
+    - Öğrenci: {sinif}. sınıf, özel yetenekli tanılı.
+    - Konu/Kazanım: '{konu}'
+    - Kullanılacak Farklılaştırma Modeli: {model_tipi}
     
-    GÖREV: Öğrencinin bu konudaki hazırbulunuşluk düzeyini ve derinlemesine bilgisini ölçmek için 3 adet 'Üst Düzey Düşünme Becerisi' gerektiren soru hazırla.
+    GÖREV: 
+    Öğrencinin hazırbulunuşluk düzeyini belirlemek amacıyla, seçilen '{model_tipi}' yaklaşımına uygun 3 adet 'Üst Düzey Düşünme Becerisi' sorusu hazırla.
     
-    DİKKAT EDİLMESİ GEREKENLER:
-    1. Sorular Bloom Taksonomisinin üst basamaklarına (Analiz, Sentez, Değerlendirme) uygun olsun.
-    2. Eğer varsa resimdeki veriyi mutlaka soruya dahil et.
-    3. Dil kullanımı: Akademik, teşvik edici ve açık olsun.
+    TALİMATLAR:
+    1. Dil kullanımı tamamiyle resmi, akademik ve MEB terminolojisine (Kazanım, Gösterge, Performans) uygun olsun.
+    2. Sorular Bloom Taksonomisinin analiz, sentez ve değerlendirme basamaklarında olsun.
+    3. Eğer görsel veri verildiyse, sorulardan en az biri görseli yorumlamaya dayalı olsun.
     """
     
     try:
@@ -65,28 +67,29 @@ def soru_uret(konu, sinif, model_tipi, resim=None):
             response = model_ai.generate_content(prompt_text)
         return response.text
     except:
-        return "MEB sunucuları yoğunluğu gibi bir hata oluştu :) Lütfen tekrar deneyin."
+        return "MEB sunucuları yoğunluğu gibi bir hata oluştu. Lütfen tekrar deneyin."
 
 def cevap_analiz_et(sorular, cevaplar, model_tipi):
     """Cevapları BEP ve RAM standartlarına göre raporlar."""
     
     prompt = f"""
-    GÖREV: Aşağıdaki öğrenci cevaplarını bir 'Özel Eğitim Değerlendirme Kurulu' üyesi titizliğiyle analiz et.
+    GÖREV: Aşağıdaki öğrenci cevaplarını bir 'Bireyselleştirilmiş Eğitim Programı (BEP) Geliştirme Birimi' üyesi ciddiyetiyle analiz et.
     
-    SORULAR: {sorular}
-    CEVAPLAR: {cevaplar}
-    UYGULANACAK MODEL: {model_tipi}
+    VERİLER:
+    - Sorular: {sorular}
+    - Öğrenci Cevapları: {cevaplar}
+    - Uygulanan Model: {model_tipi}
     
-    ÇIKTI FORMATI (Lütfen bu başlıkları kullan):
+    ÇIKTI FORMATI (Lütfen bu resmi formatı kullan):
     
-    1. 📊 PERFORMANS DÜZEYİ: (Öğrencinin konuya hakimiyetini % ve niteliksel olarak açıkla. Örn: "Bağımsız yapabilir düzeyde...")
-    2. ✅ GÜÇLÜ YÖNLER (KAZANIMLAR): (Hangi kazanımları edinmiş? MEB terminolojisi kullan.)
-    3. 🚀 GELİŞİME AÇIK ALANLAR: (Desteklenmesi gereken noktalar.)
-    4. 🎯 ÖNERİLEN ZENGİNLEŞTİRME PLANI:
-       - '{model_tipi}' modeline uygun somut bir etkinlik veya performans görevi.
-       - Bu görev hangi "Disiplinlerarası" beceriyi destekleyecek?
+    1. 📊 PERFORMANS DÜZEYİ: (Öğrencinin mevcut durumu, bağımsız yapabilirlik seviyesi.)
+    2. ✅ KAZANIM DEĞERLENDİRMESİ: (Güçlü yönlerin MEB diliyle ifadesi.)
+    3. 🚀 GELİŞİM ALANLARI: (Desteklenmesi gereken noktalar.)
+    4. 🎯 ZENGİNLEŞTİRME EYLEM PLANI:
+       - '{model_tipi}' stratejisine uygun, somut bir 'Performans Görevi' veya 'Proje Tabanlı Öğrenme' önerisi.
+       - Bu görev hangi disiplinlerarası beceriyi hedefler?
     
-    NOT: Çıktı dilin Türkçe karakterlere tam uyumlu ve resmi bir rapor dilinde olsun.
+    ÖNEMLİ: Senli-benli konuşma. Rapor dili kullan. Türkçe karakterlere dikkat et.
     """
     try:
         return model_ai.generate_content(prompt).text
@@ -98,7 +101,7 @@ def create_pdf(text, ogrenci_adi, konu):
     
     replacements = {
         "**": "", "__": "", "### ": "", "## ": "",
-        "📊": "", "✅": "", "🚀": "", "🎯": "", # Emojileri temizle (PDF'te bozuk çıkmasın)
+        "📊": "", "✅": "", "🚀": "", "🎯": "", # Emojileri temizle
         "≈": " yaklasik ", "≠": " esit degil ", "≤": " kucuk esit ", "≥": " buyuk esit ",
         "×": "x", "÷": "/", "−": "-", "–": "-", "—": "-"
     }
@@ -167,10 +170,9 @@ with st.sidebar:
     ad = st.text_input("Adı Soyadı", "Zekeriya Ayral")
     sinif = st.selectbox("Sınıf Seviyesi", [1, 2, 3, 4, 5, 6, 7, 8])
     
-    # YENİ MODEL EKLENDİ
-    egitim_modeli = st.selectbox("Eğitim/Destek Modeli", 
-                                 ["MEB BİLSEM Modeli", 
-                                  "Renzulli (Üçlü Halka)", 
+    # DÜZELTİLDİ: MEB BİLSEM seçeneği kalktı, sadece modeller kaldı.
+    egitim_modeli = st.selectbox("Farklılaştırma Modeli", 
+                                 ["Renzulli (Üçlü Halka)", 
                                   "SCAMPER (Yaratıcılık)", 
                                   "Purdue Modeli"])
     
@@ -263,4 +265,4 @@ elif st.session_state.asama == 2:
             sifirla()
 
 st.markdown("---")
-st.markdown("<div style='text-align: center; color: grey; font-size: 0.8em;'>T.C. Milli Eğitim Bakanlığı Standartlarına Uygundur | 2026</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: grey; font-size: 0.8em;'>T.C. Milli Eğitim Bakanlığı Standartlarına Uygun | 2026</div>", unsafe_allow_html=True)
